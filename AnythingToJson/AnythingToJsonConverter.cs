@@ -56,54 +56,67 @@ namespace AnythingToJson
                 {
                     throw new ArgumentNullException();
                 }
-                stream.Position = 0;
-                using var reader = new StreamReader(stream);
-                using TextFieldParser csvReader = new(reader);
-
-                bool containsQuotes = false;
-                // when a delimiter is not provided attempt to infer based on data
+                stream.Position = 0L;
+                using var reader = new StreamReader((Stream)stream);
+                using var csvReader = new TextFieldParser((TextReader)reader);
+                TextFieldParser csvReaderToUse = csvReader;
+                bool hasQuotes = false;
+                var dataWithoutHeaders = new List<string>();
                 if (delimiter == null)
                 {
-                    string headerLine = "";
-                    string dataLine = "";
-                    var fileLines = new List<string>();
+                    List<string> stringList = new List<string>();
                     reader.DiscardBufferedData();
-                    reader.BaseStream.Position = 0;
+                    reader.BaseStream.Position = 0L;
                     while (!reader.EndOfStream)
                     {
-                        fileLines.Add(reader.ReadLine());
+                        stringList.Add(reader.ReadLine());
                     }
-
-                    if (fileLines.Count < 2)
+                    // when reading a form file it will have header information, strip that out
+                    if (stringList.FirstOrDefault() != null)
                     {
-                        throw new ArgumentException("No data found in provided file, please check provided file and retry.");
-                    }
-                    headerLine = fileLines[0];
-                    // use first data line to determine delimiter used, less noisy than header line
-                    dataLine = fileLines[1];
-                    // determine what the delimiter is
-                    var sanitizedDataLine = dataLine.Replace("\"", "");
-                    Dictionary<char, int> timesUsed = new();
-                    for (int i = 0; i < sanitizedDataLine.Length - 1; i++)
-                    {
-                        // when the next character is a delimiter it will immediately follow a letter/number
-                        if (Char.IsLetterOrDigit(sanitizedDataLine[i]) && !Char.IsLetterOrDigit(sanitizedDataLine[i + 1]))
+                        if (stringList.First().Contains("-----") && stringList.Last().Contains("-----"))
                         {
-                            if (timesUsed.ContainsKey(sanitizedDataLine[i + 1]))
+                            var skippedHeaders = false;
+                            stringList.Remove(stringList.Last());
+                            foreach (var item in stringList)
                             {
-                                timesUsed[sanitizedDataLine[i + 1]]++;
+                                if (!string.IsNullOrWhiteSpace(item) && !skippedHeaders)
+                                {
+                                    continue;
+                                }
+                                skippedHeaders = true;
+                                if (!string.IsNullOrWhiteSpace(item))
+                                {
+                                    dataWithoutHeaders.Add(item);
+                                }
+
                             }
-                            else
-                            {
-                                timesUsed.Add(sanitizedDataLine[i + 1], 1);
-                            }
+                            stringList = dataWithoutHeaders;
                         }
                     }
-                    delimiter = timesUsed.OrderByDescending(x => x.Value).Take(1).First().Key.ToString();
-                    containsQuotes = headerLine.Contains("\"");
+                    var str1 = stringList.Count >= 2 ? stringList[0] : throw new ArgumentException("No data found in provided file, please check provided file and retry.");
+                    var str2 = stringList[1].Replace("\"", "");
+                    Dictionary<char, int> source = new Dictionary<char, int>();
+                    for (int index = 0; index < str2.Length - 1; ++index)
+                    {
+                        if (char.IsLetterOrDigit(str2[index]) && !char.IsLetterOrDigit(str2[index + 1]))
+                        {
+                            if (source.ContainsKey(str2[index + 1]))
+                                source[str2[index + 1]]++;
+                            else
+                                source.Add(str2[index + 1], 1);
+                        }
+                    }
+                    delimiter = source.OrderByDescending<KeyValuePair<char, int>, int>((Func<KeyValuePair<char, int>, int>)(x => x.Value)).Take<KeyValuePair<char, int>>(1).First<KeyValuePair<char, int>>().Key.ToString();
+                    hasQuotes = str1.Contains("\"");
                 }
 
-                var dataTable = ReadFileAsDataTable(csvReader, delimiter, containsQuotes, hasHeaderLine);
+                if (dataWithoutHeaders.Count > 0)
+                {
+                    var updatedReader = new StringReader(string.Join("\n", dataWithoutHeaders));
+                    csvReaderToUse = new TextFieldParser(updatedReader);
+                }
+                var dataTable = ReadFileAsDataTable(csvReaderToUse, delimiter, hasQuotes, hasHeaderLine);
                 var json = JsonSerializer.Serialize(ToDictionary(dataTable), new JsonSerializerOptions() { WriteIndented = true });
                 return new List<string>() { json };
             }
