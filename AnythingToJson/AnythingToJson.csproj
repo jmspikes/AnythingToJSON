@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <Title>AnythingToJson</Title>
-	<Version>0.0.16</Version>
+	<Version>0.0.17</Version>
 	<Description>AnythingToJSON is a lightweight library useful for converting various files and symbol delimited data to JSON in a simple and easy to use way. Convert Excel files, DataTables, CSV files, and more with ease using this library. </Description>
 	<PackageProjectUrl>https://github.com/jmspikes/AnythingToJSON</PackageProjectUrl>
 	<RepositoryUrl>https://github.com/jmspikes/AnythingToJSON</RepositoryUrl>
